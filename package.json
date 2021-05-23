@@ -1,0 +1,26 @@
+{
+  "name": "fairbanks-discord",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "dependencies": {
+    "discord.js": "12.5.3",
+    "dotenv": "10.0.0"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node app.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zangy888/fairbanks-discord.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/zangy888/fairbanks-discord/issues"
+  },
+  "homepage": "https://github.com/zangy888/fairbanks-discord#readme"
+}
