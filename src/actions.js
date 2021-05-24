@@ -3,13 +3,18 @@ const ALL_GUILD_ROLE_IDS = GUILD_ROLES.map(guild => guild.id)
 
 const startsWith = test => content => content.startsWith(test)
 
+const findGuild = input => {
+  input = input.toLowerCase()
+  return GUILD_ROLES.find(guild => guild.name.toLowerCase() === input)
+}
+
 const registration = async (client, message) => {
   const { author, guild, content } = message
 
-  const requested = content.split(/\s+/)[1].toLowerCase()
+  const requested = content.split(/\s+/)[1]
   const member = await guild.members.fetch(author.id)
 
-  const chosenRole = GUILD_ROLES.find(guild => guild.name.toLowerCase() === requested)
+  const chosenRole = findGuild(requested)
 
   if (!chosenRole) {
     throw new Error('No guild matching name!')
@@ -32,6 +37,8 @@ const registration = async (client, message) => {
   ].join('\n\n'))
 }
 
+const timestampFromMessage = message => (new Date(message.createdTimestamp)).toUTCString()
+
 const scouter = async (client, message) => {
   const { content, guild, author, channel } = message
 
@@ -43,7 +50,7 @@ const scouter = async (client, message) => {
     throw new Error('Need toon name!')
   }
 
-  const timestamp = (new Date(message.createdTimestamp)).toUTCString()
+  const timestamp = timestampFromMessage(message)
 
   const member = await guild.members.fetch(author.id)
 
@@ -62,6 +69,93 @@ const scouter = async (client, message) => {
   message.reply(`Recorded **${toon}** scouting **${action}** for **${channel.name}** at ${timestamp}`)
 }
 
+const BOSSES = new Map()
+
+const BOSS_KILL_TIMEOUT = 60 * 60 * 1000 // 1 hour
+
+const _completeKill = name => {
+  BOSSES.remove(name)
+  // TODO: upload information to google sheets
+}
+
+const startKill = async (client, message) => {
+  const name = message.channel.name
+
+  const newBoss = {
+    timeoutId: null,
+    name,
+    diedAt: timestampFromMessage(message),
+    participants: new Map()
+  }
+
+  const oldBoss = BOSSES.get(name)
+
+  BOSSES.set(name, newBoss)
+
+  newBoss.timeoutId = setTimeout(() => {
+    _completeKill(name)
+  }, BOSS_KILL_TIMEOUT)
+
+  const reply = [
+    `Killed **${name}** at ${newBoss.diedAt}.`,
+    oldBoss ? `An incomplete kill for **${name}** from ${oldBoss.diedAt} was discarded.` : '',
+    'Please add participants by using the command `!kill participate <guild-name> <number>`.'
+  ].join('\n\n')
+
+  message.reply(reply)
+}
+
+const participateKill = async (client, message) => {
+  const name = message.channel.name
+
+  const boss = BOSSES.get(name)
+
+  if (boss == null) {
+    message.reply(`No kill started for ${name}. Please start kill with \`!kill start\``)
+    return
+  }
+
+  const { participants } = boss
+
+  const parsed = message.content.split(/\s+/)
+  const guildName = findGuild(parsed[2])
+  const participantCount = parseInt(parsed[3], 10)
+
+  if (guildName == null) {
+    throw new Error('Invalid guild name')
+  }
+
+  if (participantCount == null) {
+    throw new Error('Invalid number of participants')
+  }
+
+  participants.set(guildName, participantCount)
+
+  const rolls = []
+
+  let counter = 0
+
+  for (const guild of participants.keys()) {
+    const participantCount = participants.get(guild)
+    rolls.push({ guild, start: counter + 1, stop: counter + participantCount })
+    counter += participantCount
+  }
+
+  const reply = [
+    `Set ${participantCount} participants for ${guildName}.`,
+    rolls.map(({ guild, start, stop }) => `For **${guild}**, roll **${start} to ${stop}**.`).join(' ')
+  ].join('\n\n')
+
+  message.reply(reply)
+}
+
+const completeKill = async (client, message) => {
+  const name = message.channel.name
+  _completeKill(name)
+
+  message.reply(`Completed kill for **${name}** and recorded to spreadsheet.`)
+}
+
 module.exports = [{
   test: startsWith('!scout start'),
   name: '!scout start',
@@ -74,4 +168,16 @@ module.exports = [{
   test: startsWith('!register'),
   name: '!register',
   execute: registration
+}, {
+  test: startsWith('!kill start'),
+  name: '!kill start',
+  execute: startKill
+}, {
+  test: startsWith('!kill participate'),
+  name: '!kill guild',
+  execute: participateKill
+}, {
+  test: startsWith('!kill complete'),
+  name: '!kill complete',
+  execute: completeKill
 }]

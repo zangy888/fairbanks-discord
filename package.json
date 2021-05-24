@@ -2,14 +2,12 @@
   "name": "fairbanks-discord",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "src/app.js",
   "dependencies": {
     "discord.js": "12.5.3",
     "dotenv": "10.0.0"
   },
-  "devDependencies": {
-    "standard": "16.0.3"
-  },
+  "devDependencies": {},
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node src/app.js",
