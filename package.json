@@ -7,10 +7,14 @@
     "discord.js": "12.5.3",
     "dotenv": "10.0.0"
   },
-  "devDependencies": {},
+  "devDependencies": {
+    "standard": "16.0.3"
+  },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node app.js"
+    "start": "node src/app.js",
+    "debug": "node --inspect src/app.js",
+    "format": "standard --fix src/"
   },
   "repository": {
     "type": "git",
