@@ -73,9 +73,15 @@ const BOSSES = new Map()
 
 const BOSS_KILL_TIMEOUT = 60 * 60 * 1000 // 1 hour
 
+// TODO: upload information to google sheets
 const _completeKill = name => {
-  BOSSES.remove(name)
-  // TODO: upload information to google sheets
+  const boss = BOSSES.get(name)
+
+  // clean up any timers
+  clearTimeout(boss.timeoutId)
+
+  // remove the boss from the active stack
+  BOSSES.delete(name)
 }
 
 const startKill = async (client, message) => {
@@ -100,7 +106,9 @@ const startKill = async (client, message) => {
     `Killed **${name}** at ${newBoss.diedAt}.`,
     oldBoss ? `An incomplete kill for **${name}** from ${oldBoss.diedAt} was discarded.` : '',
     'Please add participants by using the command `!kill participate <guild-name> <number>`.'
-  ].join('\n\n')
+  ]
+    .filter(a => a.length > 0) // remove empty lines
+    .join('\n\n')
 
   message.reply(reply)
 }
@@ -118,10 +126,10 @@ const participateKill = async (client, message) => {
   const { participants } = boss
 
   const parsed = message.content.split(/\s+/)
-  const guildName = findGuild(parsed[2])
+  const participantGuild = findGuild(parsed[2])
   const participantCount = parseInt(parsed[3], 10)
 
-  if (guildName == null) {
+  if (participantGuild == null) {
     throw new Error('Invalid guild name')
   }
 
@@ -129,21 +137,21 @@ const participateKill = async (client, message) => {
     throw new Error('Invalid number of participants')
   }
 
-  participants.set(guildName, participantCount)
+  participants.set(participantGuild.name, participantCount)
 
   const rolls = []
 
   let counter = 0
 
-  for (const guild of participants.keys()) {
-    const participantCount = participants.get(guild)
-    rolls.push({ guild, start: counter + 1, stop: counter + participantCount })
+  for (const guildName of participants.keys()) {
+    const participantCount = participants.get(guildName)
+    rolls.push({ guildName, start: counter + 1, stop: counter + participantCount })
     counter += participantCount
   }
 
   const reply = [
-    `Set ${participantCount} participants for ${guildName}.`,
-    rolls.map(({ guild, start, stop }) => `For **${guild}**, roll **${start} to ${stop}**.`).join(' ')
+    `Set ${participantCount} participants for ${participantGuild.name}.`,
+    rolls.map(({ guildName, start, stop }) => `For **${guildName}**, roll **${start} to ${stop}**.`).join('\n')
   ].join('\n\n')
 
   message.reply(reply)
