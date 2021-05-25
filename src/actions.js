@@ -1,5 +1,5 @@
 const GUILD_ROLES = require('./GUILDS')
-const { logKill } = require('./google')
+const { logKill } = require('./sheets')
 
 const ALL_GUILD_ROLE_IDS = GUILD_ROLES.map(guild => guild.id)
 
