@@ -1,4 +1,6 @@
-const GUILD_ROLES = require('./GUILDS.js')
+const GUILD_ROLES = require('./GUILDS')
+const { logKill } = require('./google')
+
 const ALL_GUILD_ROLE_IDS = GUILD_ROLES.map(guild => guild.id)
 
 const startsWith = test => content => content.startsWith(test)
@@ -73,8 +75,7 @@ const BOSSES = new Map()
 
 const BOSS_KILL_TIMEOUT = 4000 // 60 * 60 * 1000 // 1 hour
 
-// TODO: upload information to google sheets
-const completeKillHelper = async name => {
+const completeKillHelper = async (googleAuth, name) => {
   const boss = BOSSES.get(name)
 
   if (boss == null) {
@@ -87,12 +88,12 @@ const completeKillHelper = async name => {
   // remove the boss from the active stack
   BOSSES.delete(name)
 
-  console.log(`Kill completed for ${name}`)
+  await logKill(googleAuth, boss)
 
   return true
 }
 
-const startKill = async (client, message) => {
+const startKill = async (client, message, googleAuth) => {
   const name = message.channel.name
 
   const newBoss = {
@@ -107,7 +108,7 @@ const startKill = async (client, message) => {
   BOSSES.set(name, newBoss)
 
   newBoss.timeoutId = setTimeout(() => {
-    completeKillHelper(name)
+    completeKillHelper(googleAuth, name)
   }, BOSS_KILL_TIMEOUT)
 
   const reply = [
@@ -165,9 +166,9 @@ const participateKill = async (client, message) => {
   message.reply(reply)
 }
 
-const completeKill = async (client, message) => {
+const completeKill = async (client, message, googleAuth) => {
   const name = message.channel.name
-  const completed = await completeKillHelper(name)
+  const completed = await completeKillHelper(googleAuth, name)
 
   if (completed) {
     message.reply(`Completed kill for **${name}** and recorded to spreadsheet.`)
