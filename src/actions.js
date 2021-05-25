@@ -10,7 +10,7 @@ const findGuild = input => {
   return GUILD_ROLES.find(guild => guild.name.toLowerCase() === input)
 }
 
-const registration = async (client, message) => {
+const registration = async (message) => {
   const { author, guild, content } = message
 
   const requested = content.split(/\s+/)[1]
@@ -41,7 +41,7 @@ const registration = async (client, message) => {
 
 const timestampFromMessage = message => (new Date(message.createdTimestamp)).toUTCString()
 
-const scouter = async (client, message) => {
+const scouter = async (message) => {
   const { content, guild, author, channel } = message
 
   const split = content.split(/\s+/)
@@ -75,7 +75,7 @@ const BOSSES = new Map()
 
 const BOSS_KILL_TIMEOUT = 4000 // 60 * 60 * 1000 // 1 hour
 
-const completeKillHelper = async (googleAuth, name) => {
+const completeKillHelper = async (name) => {
   const boss = BOSSES.get(name)
 
   if (boss == null) {
@@ -88,12 +88,12 @@ const completeKillHelper = async (googleAuth, name) => {
   // remove the boss from the active stack
   BOSSES.delete(name)
 
-  await logKill(googleAuth, boss)
+  await logKill(boss)
 
   return true
 }
 
-const startKill = async (client, message, googleAuth) => {
+const startKill = async (message) => {
   const name = message.channel.name
 
   const newBoss = {
@@ -108,7 +108,7 @@ const startKill = async (client, message, googleAuth) => {
   BOSSES.set(name, newBoss)
 
   newBoss.timeoutId = setTimeout(() => {
-    completeKillHelper(googleAuth, name)
+    completeKillHelper(name)
   }, BOSS_KILL_TIMEOUT)
 
   const reply = [
@@ -122,7 +122,7 @@ const startKill = async (client, message, googleAuth) => {
   message.reply(reply)
 }
 
-const participateKill = async (client, message) => {
+const participateKill = async (message) => {
   const name = message.channel.name
 
   const boss = BOSSES.get(name)
@@ -166,9 +166,9 @@ const participateKill = async (client, message) => {
   message.reply(reply)
 }
 
-const completeKill = async (client, message, googleAuth) => {
+const completeKill = async (message) => {
   const name = message.channel.name
-  const completed = await completeKillHelper(googleAuth, name)
+  const completed = await completeKillHelper(name)
 
   if (completed) {
     message.reply(`Completed kill for **${name}** and recorded to spreadsheet.`)

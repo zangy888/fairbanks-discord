@@ -7,9 +7,13 @@ require('dotenv').config()
 
 const client = new Discord.Client()
 
-const googleAuth = new google.auth.GoogleAuth({
-  keyFile: 'secret.json',
-  scopes: ['https://www.googleapis.com/auth/spreadsheets']
+google.options({
+  // All requests made with this object will use these settings unless overridden.
+  timeout: 1000,
+  auth: new google.auth.GoogleAuth({
+    keyFile: 'secret.json',
+    scopes: ['https://www.googleapis.com/auth/spreadsheets']
+  })
 })
 
 client.login(process.env.DISCORD_TOKEN)
@@ -23,7 +27,7 @@ client.on('message', async message => {
   for (const action of actions) {
     if (action.test(message.content)) {
       try {
-        await action.execute(client, message, googleAuth)
+        await action.execute(message)
       } catch (err) {
         console.error(err)
         message.member.send(`Invalid command for ${action.name}`)

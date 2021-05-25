@@ -3,7 +3,7 @@ const sheets = google.sheets('v4')
 const GUILDS = require('./GUILDS')
 
 module.exports = {
-  logKill: async (googleAuth, boss) => {
+  logKill: async (boss) => {
     console.log(`Kill completed for ${boss.name}`)
 
     const request = {
@@ -28,9 +28,7 @@ module.exports = {
           [boss.diedAt],
           ...(GUILDS.map(({ name }) => ([boss.participants.get(name) || null])))
         ]
-      },
-
-      auth: googleAuth
+      }
     }
 
     await sheets.spreadsheets.values.append(request)
