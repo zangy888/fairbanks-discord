@@ -11,6 +11,7 @@ client.on('ready', () => {
 })
 
 client.on('message', async message => {
+  // TODO add channel restrictions
   for (const action of actions) {
     if (action.test(message.content)) {
       try {

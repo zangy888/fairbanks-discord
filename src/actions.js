@@ -71,17 +71,25 @@ const scouter = async (client, message) => {
 
 const BOSSES = new Map()
 
-const BOSS_KILL_TIMEOUT = 60 * 60 * 1000 // 1 hour
+const BOSS_KILL_TIMEOUT = 4000 // 60 * 60 * 1000 // 1 hour
 
 // TODO: upload information to google sheets
-const _completeKill = name => {
+const completeKillHelper = async name => {
   const boss = BOSSES.get(name)
+
+  if (boss == null) {
+    return false
+  }
 
   // clean up any timers
   clearTimeout(boss.timeoutId)
 
   // remove the boss from the active stack
   BOSSES.delete(name)
+
+  console.log(`Kill completed for ${name}`)
+
+  return true
 }
 
 const startKill = async (client, message) => {
@@ -99,7 +107,7 @@ const startKill = async (client, message) => {
   BOSSES.set(name, newBoss)
 
   newBoss.timeoutId = setTimeout(() => {
-    _completeKill(name)
+    completeKillHelper(name)
   }, BOSS_KILL_TIMEOUT)
 
   const reply = [
@@ -159,9 +167,13 @@ const participateKill = async (client, message) => {
 
 const completeKill = async (client, message) => {
   const name = message.channel.name
-  _completeKill(name)
+  const completed = await completeKillHelper(name)
 
-  message.reply(`Completed kill for **${name}** and recorded to spreadsheet.`)
+  if (completed) {
+    message.reply(`Completed kill for **${name}** and recorded to spreadsheet.`)
+  } else {
+    message.reply(`No kill to complete for **${name}**. It may have been completed automatically (1 hour timeout), or you may need to start a kill with \`!kill start\``)
+  }
 }
 
 module.exports = [{
