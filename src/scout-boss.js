@@ -19,6 +19,11 @@ const getActiveScouts = async () => {
   }
 
   const scouts = (await sheets.spreadsheets.values.get(request)).data.values
+
+  if (scouts == null) {
+    return []
+  }
+
   return scouts.map(data => {
     return {
       channelName: data[0],
@@ -76,31 +81,36 @@ const updateActiveScout = async (index, updatedAt) => {
 }
 
 const updateAllActiveScouts = async (scouts) => {
-  const request = {
+  const clearRequest = {
     spreadsheetId: '1G4E9RhKZteUUh0G_pl-ti64ZwqJAvgexGOpzI0BKqAA',
-    // Values are appended after the last row of the table beginning at A1
+    range: "'Active Scouting'!A2:G1000",
+    resource: {}
+  }
+
+  await sheets.spreadsheets.values.clear(clearRequest)
+
+  const updateRequest = {
+    spreadsheetId: '1G4E9RhKZteUUh0G_pl-ti64ZwqJAvgexGOpzI0BKqAA',
     range: "'Active Scouting'!A2:G1000",
     valueInputOption: 'USER_ENTERED',
     // Body to be updated
     resource: {
       majorDimension: 'ROWS',
-      values: [
-        scouts.map(scout => {
-          return [
-            scout.channelName,
-            scout.guildName,
-            scout.userName,
-            scout.toonName,
-            scout.timestamp,
-            scout.createdAt,
-            scout.updatedAt || null
-          ]
-        })
-      ]
+      values: scouts.map(scout => {
+        return [
+          scout.channelName,
+          scout.guildName,
+          scout.userName,
+          scout.toonName,
+          scout.timestamp,
+          scout.createdAt,
+          scout.updatedAt || null
+        ]
+      })
     }
   }
 
-  return sheets.spreadsheets.values.update(request)
+  return sheets.spreadsheets.values.update(updateRequest)
 }
 
 const addCompletedScout = async (completed) => {
@@ -199,7 +209,7 @@ const scoutStopHelper = async ({ userName, toonName, channelName }) => {
 
   const result = {
     ...existingScout,
-    duration: (existingScout.timestamp - endTimestamp) / 60000,
+    duration: (endTimestamp - existingScout.timestamp) / 60000,
     stoppedAt: dateFromTimestamp(endTimestamp)
   }
 
