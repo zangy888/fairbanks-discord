@@ -1,10 +1,43 @@
-const { logKill } = require('./sheets')
+const { google } = require('googleapis')
 const { dateFromTimestamp } = require('./utils')
-const { findGuild } = require('./guilds')
+const { GUILDS, findGuild } = require('./guilds')
+
+const sheets = google.sheets('v4')
 
 const BOSSES = new Map()
 
 const BOSS_KILL_TIMEOUT_SECONDS = 60 * 60 * 1000 // 1 hour
+
+const logKill = async (boss) => {
+  console.log(`Logging kill completed for ${boss.name} to sheets`)
+
+  const request = {
+  // The ID of the spreadsheet to update.
+    spreadsheetId: '1G4E9RhKZteUUh0G_pl-ti64ZwqJAvgexGOpzI0BKqAA',
+
+    // The A1 notation of a range to search for a logical table of data.
+    // Values are appended after the last row of the table.
+    range: "'Kill Logs'!A1:A1",
+
+    // How the input data should be interpreted.
+    valueInputOption: 'USER_ENTERED',
+
+    // How the input data should be inserted.
+    insertDataOption: 'INSERT_ROWS',
+
+    resource: {
+      majorDimension: 'COLUMNS',
+      values: [
+        [boss.name],
+        [boss.timestamp],
+        [boss.diedAt],
+        ...(GUILDS.map(({ name }) => ([boss.participants.get(name) || null])))
+      ]
+    }
+  }
+
+  await sheets.spreadsheets.values.append(request)
+}
 
 const completeKillHelper = async (name) => {
   const boss = BOSSES.get(name)
