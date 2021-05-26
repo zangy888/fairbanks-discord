@@ -33,4 +33,8 @@ module.exports = [{
   test: equals('!kill complete'),
   name: '!kill complete',
   execute: completeKill
+}, {
+  test: equals('!ping'),
+  name: '!ping',
+  execute: message => message.reply('Hello!')
 }]
