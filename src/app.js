@@ -3,6 +3,7 @@ const { google } = require('googleapis')
 
 const ValidationError = require('./validation-error')
 const actions = require('./actions')
+const timers = require('./timers')
 
 require('dotenv').config()
 
@@ -23,6 +24,9 @@ client.login(process.env.DISCORD_TOKEN)
 
 client.on('ready', () => {
   console.log('Bot is ready')
+
+  // initialize all timers
+  timers.forEach(timer => timer())
 })
 
 client.on('message', async message => {

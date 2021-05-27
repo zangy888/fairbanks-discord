@@ -6,13 +6,10 @@ const { ALL_GUILD_ROLE_IDS } = require('./guilds')
 
 const sheets = google.sheets('v4')
 
-const SCOUTS = new Map()
-
+const SCOUT_UPDATE_POLL_SECONDS = 10 * 60 * 1000 // 10 minutes
 const SCOUT_UPDATE_TIMEOUT_SECONDS = 60 * 60 * 1000 // 1 hour
 
 const asyncQueue = createAsyncQueue()
-
-const scoutKey = scout => `${scout.userName}:${scout.toonName}`
 
 const getActiveScouts = async () => {
   const request = {
@@ -168,28 +165,7 @@ const deriveScoutInformation = async (message) => {
   }
 }
 
-const clearScoutTimeout = ({ userName, toonName }) => {
-  const timeoutKey = scoutKey({ userName, toonName })
-  const timeoutScout = SCOUTS.get(timeoutKey)
-
-  if (timeoutScout != null) {
-    clearTimeout(timeoutScout.timeoutId)
-    delete timeoutScout.timeoutId
-    SCOUTS.delete(timeoutKey)
-  }
-}
-
-const startScoutTimeout = (scout) => {
-  SCOUTS.set(scoutKey(scout), scout)
-
-  scout.timeoutId = setTimeout(() => {
-    scoutStopHelper(scout)
-  }, SCOUT_UPDATE_TIMEOUT_SECONDS)
-}
-
 const scoutStopHelper = async ({ userName, toonName, channelName }) => {
-  clearScoutTimeout({ userName, toonName })
-
   const activeScouts = await asyncQueue(getActiveScouts)
 
   const existingScout = activeScouts.find(scout => {
@@ -221,6 +197,22 @@ const scoutStopHelper = async ({ userName, toonName, channelName }) => {
   return result
 }
 
+const scoutTimer = async () => {
+  setTimeout(scoutTimer, SCOUT_UPDATE_POLL_SECONDS)
+
+  const activeScouts = await asyncQueue(getActiveScouts)
+
+  const timestamp = Date.now()
+
+  for (const activeScout of activeScouts) {
+    const duration = (timestamp - activeScout.timestamp) / 1000
+
+    if (duration > SCOUT_UPDATE_TIMEOUT_SECONDS) {
+      await scoutStopHelper(activeScout)
+    }
+  }
+}
+
 const scoutStart = async (message) => {
   const { userName, toonName, guildName, channelName } = await deriveScoutInformation(message)
   const activeScouts = await asyncQueue(getActiveScouts)
@@ -246,15 +238,11 @@ const scoutStart = async (message) => {
 
   await asyncQueue(addActiveScout.bind(null, newScout))
 
-  startScoutTimeout(newScout)
-
   message.reply(`**Starting** to scout with **${toonName}** in **${channelName}** at ${newScout.createdAt}`)
 }
 
 const scoutContinue = async (message) => {
   const { userName, toonName, channelName } = await deriveScoutInformation(message)
-
-  clearScoutTimeout({ userName, toonName })
 
   const activeScouts = await asyncQueue(getActiveScouts)
 
@@ -276,8 +264,6 @@ const scoutContinue = async (message) => {
 
   await asyncQueue(updateActiveScout.bind(null, existingScoutIndex, updatedAt))
 
-  startScoutTimeout(existingScout)
-
   message.reply(`**Continuing** to scout with **${toonName}** in **${channelName}** at ${updatedAt}`)
 }
 
@@ -292,5 +278,6 @@ const scoutStop = async (message) => {
 module.exports = {
   scoutStart,
   scoutContinue,
-  scoutStop
+  scoutStop,
+  scoutTimer
 }
