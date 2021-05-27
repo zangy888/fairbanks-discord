@@ -1,4 +1,5 @@
 const { dateFromTimestamp } = require('./utils')
+const ValidationError = require('./validation-error')
 const { google } = require('googleapis')
 
 const { ALL_GUILD_ROLE_IDS } = require('./guilds')
@@ -146,7 +147,7 @@ const deriveScoutInformation = async (message) => {
   const toonName = content.split(/\s+/)[2]
 
   if (toonName == null) {
-    throw new Error('Need toon name!')
+    throw new ValidationError('`!scout` commands should have a toon name')
   }
 
   const member = await guild.members.fetch(author.id)
@@ -154,7 +155,7 @@ const deriveScoutInformation = async (message) => {
   const guildRole = member.roles.cache.find(role => ALL_GUILD_ROLE_IDS.includes(role.id))
 
   if (guildRole == null) {
-    throw new Error('User must have valid guild!')
+    throw new ValidationError('No guild role found. See #read-first and try `!register`')
   }
 
   return {
@@ -194,11 +195,11 @@ const scoutStopHelper = async ({ userName, toonName, channelName }) => {
   })
 
   if (existingScout == null) {
-    throw new Error('User must have started a scouting session in order to stop it!')
+    throw new ValidationError('No scouting session found for user. See #read-first and try `!scout start`')
   }
 
   if (existingScout.channelName !== channelName) {
-    throw new Error('User started a scouting session in another channel!')
+    throw new ValidationError(`Scouting session started for a different boss. Please check #${existingScout.channelName}`)
   }
 
   const endTimestamp = Date.now()
@@ -227,7 +228,7 @@ const scoutStart = async (message) => {
   })
 
   if (existingScout != null) {
-    throw new Error('User must stop a scouting session before starting a new scouting session!')
+    throw new ValidationError('Must stop a scouting session before starting a new scouting session. See #read-first and try `!scout stop`')
   }
 
   const timestamp = message.createdTimestamp
@@ -260,13 +261,13 @@ const scoutContinue = async (message) => {
   })
 
   if (existingScoutIndex === -1) {
-    throw new Error('User must have started a scouting session in order to continue it!')
+    throw new ValidationError('No scouting session found for user. See #read-first and try `!scout start`')
   }
 
   const existingScout = activeScouts[existingScoutIndex]
 
   if (existingScout.channelName !== channelName) {
-    throw new Error('User already started a scouting session in another channel!')
+    throw new ValidationError(`Scouting session started for a different boss. Please check #${existingScout.channelName}`)
   }
 
   const updatedAt = dateFromTimestamp(message.createdTimestamp)

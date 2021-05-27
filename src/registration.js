@@ -1,3 +1,4 @@
+const ValidationError = require('./validation-error')
 const { ALL_GUILD_ROLE_IDS, findGuild } = require('./guilds')
 
 module.exports = async (message) => {
@@ -9,7 +10,7 @@ module.exports = async (message) => {
   const chosenRole = findGuild(requested)
 
   if (!chosenRole) {
-    throw new Error('No guild matching name!')
+    throw new ValidationError(`Could not find a guild matching: ${requested}`)
   }
 
   // remove all guild roles

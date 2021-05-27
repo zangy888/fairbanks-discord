@@ -1,6 +1,7 @@
 const Discord = require('discord.js')
 const { google } = require('googleapis')
 
+const ValidationError = require('./validation-error')
 const actions = require('./actions')
 
 require('dotenv').config()
@@ -39,9 +40,16 @@ client.on('message', async message => {
       if (allowedChannel) {
         try {
           await action.execute(message)
-        } catch (err) {
-          console.error(err)
-          message.member.send(`Invalid command for ${action.name}`)
+        } catch (error) {
+          console.error(error)
+
+          let errorMessage = `${message.content} is invalid`
+
+          if (error instanceof ValidationError) {
+            errorMessage += '.' + error.message
+          }
+
+          message.member.send(errorMessage)
         }
       } else {
         const validChannels = action.channels.map(channel => `#${channel}`).join(', ')
