@@ -30,6 +30,11 @@ client.on('ready', () => {
 })
 
 client.on('message', async message => {
+  if (message.member == null) {
+    // don't reply to messages that the bot initiates
+    return
+  }
+
   for (const action of actions) {
     const { content, channel } = message
     const allowedAction = action.test(content)
@@ -45,12 +50,12 @@ client.on('message', async message => {
         try {
           await action.execute(message)
         } catch (error) {
-          console.error(error)
-
-          let errorMessage = `${message.content} is invalid`
+          let errorMessage = `\`${message.content}\` is invalid`
 
           if (error instanceof ValidationError) {
-            errorMessage += '.' + error.message
+            errorMessage += '. ' + error.message
+          } else {
+            console.error(error)
           }
 
           message.member.send(errorMessage)

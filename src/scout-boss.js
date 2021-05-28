@@ -6,15 +6,15 @@ const { ALL_GUILD_ROLE_IDS } = require('./guilds')
 
 const sheets = google.sheets('v4')
 
-const SCOUT_UPDATE_POLL_SECONDS = 10 * 60 * 1000 // 10 minutes
-const SCOUT_UPDATE_TIMEOUT_SECONDS = 60 * 60 * 1000 // 1 hour
+const SCOUT_UPDATE_POLL_MS = 60000 // 10 * 60 * 1000 // 10 minutes
+const SCOUT_UPDATE_TIMEOUT_MS = 60000 // 60 * 60 * 1000 // 1 hour
 
 const asyncQueue = createAsyncQueue()
 
 const getActiveScouts = async () => {
   const request = {
     spreadsheetId: '1G4E9RhKZteUUh0G_pl-ti64ZwqJAvgexGOpzI0BKqAA',
-    range: "'Active Scouting'!A2:G1000",
+    range: "'Active Scouting'!A2:H1000",
     majorDimension: 'ROWS'
   }
 
@@ -30,9 +30,10 @@ const getActiveScouts = async () => {
       guildName: data[1],
       userName: data[2],
       toonName: data[3],
-      timestamp: parseInt(data[4], 10),
+      createdTimestamp: parseInt(data[4], 10),
       createdAt: data[5],
-      updatedAt: data[6]
+      updatedTimestamp: parseInt(data[6], 10),
+      updatedAt: data[7]
     }
   })
 }
@@ -53,9 +54,10 @@ const addActiveScout = async (scout) => {
           scout.guildName,
           scout.userName,
           scout.toonName,
-          scout.timestamp,
+          scout.createdTimestamp,
           scout.createdAt,
-          null // no updatedAt value when adding a scout
+          scout.createdTimestamp, // updatedTimestamp value is createdTimestamp
+          scout.createdAt // updatedAt value is createdAt
         ]
       ]
     }
@@ -64,16 +66,16 @@ const addActiveScout = async (scout) => {
   return sheets.spreadsheets.values.append(request)
 }
 
-const updateActiveScout = async (index, updatedAt) => {
+const updateActiveScout = async (index, updatedTimestamp, updatedAt) => {
   const request = {
     spreadsheetId: '1G4E9RhKZteUUh0G_pl-ti64ZwqJAvgexGOpzI0BKqAA',
     // Values are appended after the last row of the table beginning at A1
-    range: `'Active Scouting'!G${index + 2}:G${index + 2}`,
+    range: `'Active Scouting'!G${index + 2}:H${index + 2}`,
     valueInputOption: 'USER_ENTERED',
     // Body to be updated
     resource: {
       majorDimension: 'ROWS',
-      values: [[updatedAt]]
+      values: [[updatedTimestamp, updatedAt]]
     }
   }
 
@@ -83,7 +85,7 @@ const updateActiveScout = async (index, updatedAt) => {
 const updateAllActiveScouts = async (scouts) => {
   const clearRequest = {
     spreadsheetId: '1G4E9RhKZteUUh0G_pl-ti64ZwqJAvgexGOpzI0BKqAA',
-    range: "'Active Scouting'!A2:G1000",
+    range: "'Active Scouting'!A2:H1000",
     resource: {}
   }
 
@@ -91,7 +93,7 @@ const updateAllActiveScouts = async (scouts) => {
 
   const updateRequest = {
     spreadsheetId: '1G4E9RhKZteUUh0G_pl-ti64ZwqJAvgexGOpzI0BKqAA',
-    range: "'Active Scouting'!A2:G1000",
+    range: "'Active Scouting'!A2:H1000",
     valueInputOption: 'USER_ENTERED',
     // Body to be updated
     resource: {
@@ -102,9 +104,10 @@ const updateAllActiveScouts = async (scouts) => {
           scout.guildName,
           scout.userName,
           scout.toonName,
-          scout.timestamp,
+          scout.createdTimestamp,
           scout.createdAt,
-          scout.updatedAt || null
+          scout.updatedTimestamp,
+          scout.updatedAt
         ]
       })
     }
@@ -188,7 +191,7 @@ const scoutStopHelper = async ({ userName, toonName, channelName }) => {
 
   const result = {
     ...existingScout,
-    duration: (endTimestamp - existingScout.timestamp) / 60000,
+    duration: (endTimestamp - existingScout.createdTimestamp) / 60000,
     stoppedAt: dateFromTimestamp(endTimestamp)
   }
 
@@ -198,16 +201,15 @@ const scoutStopHelper = async ({ userName, toonName, channelName }) => {
 }
 
 const scoutTimer = async () => {
-  setTimeout(scoutTimer, SCOUT_UPDATE_POLL_SECONDS)
+  setTimeout(scoutTimer, SCOUT_UPDATE_POLL_MS)
 
   const activeScouts = await asyncQueue(getActiveScouts)
 
-  const timestamp = Date.now()
+  const currentTimestamp = Date.now()
 
   for (const activeScout of activeScouts) {
-    const duration = (timestamp - activeScout.timestamp) / 1000
-
-    if (duration > SCOUT_UPDATE_TIMEOUT_SECONDS) {
+    const timeSinceUpdate = currentTimestamp - activeScout.updatedTimestamp
+    if (timeSinceUpdate > SCOUT_UPDATE_TIMEOUT_MS) {
       await scoutStopHelper(activeScout)
     }
   }
@@ -225,15 +227,15 @@ const scoutStart = async (message) => {
     throw new ValidationError('Must stop a scouting session before starting a new scouting session. See #read-first and try `!scout stop`')
   }
 
-  const timestamp = message.createdTimestamp
+  const { createdTimestamp } = message
 
   const newScout = {
     channelName,
     userName,
     guildName,
     toonName,
-    timestamp,
-    createdAt: dateFromTimestamp(timestamp)
+    createdTimestamp,
+    createdAt: dateFromTimestamp(createdTimestamp)
   }
 
   await asyncQueue(addActiveScout.bind(null, newScout))
@@ -260,9 +262,10 @@ const scoutContinue = async (message) => {
     throw new ValidationError(`Scouting session started for a different boss. Please check #${existingScout.channelName}`)
   }
 
-  const updatedAt = dateFromTimestamp(message.createdTimestamp)
+  const updatedTimestamp = message.createdTimestamp
+  const updatedAt = dateFromTimestamp(updatedTimestamp)
 
-  await asyncQueue(updateActiveScout.bind(null, existingScoutIndex, updatedAt))
+  await asyncQueue(updateActiveScout.bind(null, existingScoutIndex, updatedTimestamp, updatedAt))
 
   message.reply(`**Continuing** to scout with **${toonName}** in **${channelName}** at ${updatedAt}`)
 }
