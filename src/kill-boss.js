@@ -1,20 +1,56 @@
 const { google } = require('googleapis')
-const { dateFromTimestamp } = require('./utils')
+const { dateFromTimestamp, createAsyncQueue } = require('./utils')
+
+const ValidationError = require('./validation-error')
 const { GUILDS, findGuild } = require('./guilds')
+const { readfirst } = require('./channels')
 
 const sheets = google.sheets('v4')
 
-const BOSSES = new Map()
+const KILL_COMPLETE_POLL_MS = 60000 // 10 * 60 * 1000 // 10 minutes
+const KILL_COMPLETE_TIMEOUT_MS = 60000 // 60 * 60 * 1000 // 1 hour
 
-const BOSS_KILL_TIMEOUT_SECONDS = 60 * 60 * 1000 // 1 hour
+const asyncQueue = createAsyncQueue()
 
-const addKill = async (boss) => {
-  console.log(`Logging kill completed for ${boss.name} to sheets`)
+const LAST_COLUMN = GUILDS[GUILDS.length - 1].column
+
+const getActiveKills = async () => {
+  const request = {
+    spreadsheetId: '1G4E9RhKZteUUh0G_pl-ti64ZwqJAvgexGOpzI0BKqAA',
+    range: `'Active Kills'!A2:${LAST_COLUMN}3`,
+    majorDimension: 'ROWS'
+  }
+
+  const bosses = (await sheets.spreadsheets.values.get(request)).data.values
+
+  if (bosses == null) {
+    return []
+  }
+
+  return bosses.map(data => {
+    return {
+      channelName: data[0],
+      timestamp: parseInt(data[1], 10),
+      diedAt: data[2],
+      ...(
+        GUILDS.reduce((participation, guild, index) => {
+          participation[guild.name] = parseInt(data[index + 3], 10) || 0
+          return participation
+        }, {})
+      )
+    }
+  })
+}
+
+const addKill = async (boss, completed) => {
+  if (completed == null) {
+    throw new Error('Must specify whether the kill has been completed')
+  }
 
   const request = {
     spreadsheetId: '1G4E9RhKZteUUh0G_pl-ti64ZwqJAvgexGOpzI0BKqAA',
     // Values are appended after the last row of the table beginning at A1
-    range: "'Kill Logs'!A1:A1",
+    range: `'${completed ? 'Kill Logs' : 'Active Kills'}'!A1:A1`,
     valueInputOption: 'USER_ENTERED',
     insertDataOption: 'INSERT_ROWS',
     // Body to be appended
@@ -22,10 +58,10 @@ const addKill = async (boss) => {
       majorDimension: 'ROWS',
       values: [
         [
-          boss.name,
+          boss.channelName,
           boss.timestamp,
           boss.diedAt,
-          ...(GUILDS.map(({ name }) => (boss.participants.get(name) || null)))
+          ...(GUILDS.map(({ name }) => (boss[name] || 0)))
         ]
       ]
     }
@@ -34,112 +70,174 @@ const addKill = async (boss) => {
   return sheets.spreadsheets.values.append(request)
 }
 
-const completeKillHelper = async (name) => {
-  const boss = BOSSES.get(name)
+const updateActiveKill = async (index, guildName, participantCount) => {
+  const { column } = findGuild(guildName)
+  const cell = `${column}${index + 2}`
 
-  if (boss == null) {
-    return false
+  const request = {
+    spreadsheetId: '1G4E9RhKZteUUh0G_pl-ti64ZwqJAvgexGOpzI0BKqAA',
+    // Values are appended after the last row of the table beginning at A1
+    range: `'Active Kills'!${cell}:H${cell}`,
+    valueInputOption: 'USER_ENTERED',
+    // Body to be updated
+    resource: {
+      majorDimension: 'ROWS',
+      values: [[participantCount]]
+    }
   }
 
-  // clean up any timers
-  clearTimeout(boss.timeoutId)
+  return sheets.spreadsheets.values.update(request)
+}
 
-  // remove the boss from the active stack
-  BOSSES.delete(name)
+const updateAllActiveKills = async (bosses) => {
+  const clearRequest = {
+    spreadsheetId: '1G4E9RhKZteUUh0G_pl-ti64ZwqJAvgexGOpzI0BKqAA',
+    range: `'Active Kills'!A2:${LAST_COLUMN}3`,
+    resource: {}
+  }
 
-  await addKill(boss)
+  await sheets.spreadsheets.values.clear(clearRequest)
 
-  return true
+  const updateRequest = {
+    spreadsheetId: '1G4E9RhKZteUUh0G_pl-ti64ZwqJAvgexGOpzI0BKqAA',
+    range: `'Active Kills'!A2:${LAST_COLUMN}3`,
+    valueInputOption: 'USER_ENTERED',
+    // Body to be updated
+    resource: {
+      majorDimension: 'ROWS',
+      values: bosses.map(boss => {
+        return [
+          boss.channelName,
+          boss.timestamp,
+          boss.diedAt,
+          ...(GUILDS.map(({ name }) => (boss[name] || 0)))
+        ]
+      })
+    }
+  }
+
+  return sheets.spreadsheets.values.update(updateRequest)
+}
+
+const completeKillHelper = async ({ channelName }) => {
+  const activeKills = await asyncQueue(getActiveKills)
+
+  const currentBoss = activeKills.find(boss => boss.channelName === channelName)
+
+  if (currentBoss == null) {
+    throw new ValidationError(`Cannot find a kill for ${channelName}. See ${readfirst} and try \`!kill start\``)
+  }
+
+  const otherBosses = activeKills.filter(other => other !== currentBoss)
+
+  await asyncQueue(updateAllActiveKills.bind(null, otherBosses))
+
+  await asyncQueue(addKill.bind(null, currentBoss, true))
+}
+
+const killTimer = async () => {
+  setTimeout(killTimer, KILL_COMPLETE_POLL_MS)
+
+  const activeKills = await asyncQueue(getActiveKills)
+
+  const currentTimestamp = Date.now()
+
+  for (const currentBoss of activeKills) {
+    const timeSinceUpdate = currentTimestamp - currentBoss.timestamp
+    if (timeSinceUpdate > KILL_COMPLETE_TIMEOUT_MS) {
+      await completeKillHelper(currentBoss)
+    }
+  }
 }
 
 const startKill = async (message) => {
-  const name = message.channel.name
+  const channelName = message.channel.name
+
+  const activeKills = await asyncQueue(getActiveKills)
+
+  const currentBoss = activeKills.find(boss => boss.channelName === channelName)
+
+  if (currentBoss != null) {
+    throw new ValidationError(`Found an ongoing kill for **${channelName}**. See ${readfirst} and try \`!kill participate\` or \`!kill complete\``)
+  }
+
   const timestamp = message.createdTimestamp
 
   const newBoss = {
-    timeoutId: null,
-    name,
+    channelName,
     timestamp,
-    diedAt: dateFromTimestamp(timestamp),
-    participants: new Map()
+    diedAt: dateFromTimestamp(timestamp)
   }
 
-  const oldBoss = BOSSES.get(name)
+  await asyncQueue(addKill.bind(null, newBoss, false))
 
-  BOSSES.set(name, newBoss)
-
-  newBoss.timeoutId = setTimeout(() => {
-    completeKillHelper(name)
-  }, BOSS_KILL_TIMEOUT_SECONDS)
-
-  const reply = [
-    `Killed **${name}** at ${newBoss.diedAt}.`,
-    oldBoss ? `An incomplete kill for **${name}** from ${oldBoss.diedAt} was discarded.` : '',
-    'Please add participants by using the command `!kill participate <guild-name> <number>`.'
-  ]
-    .filter(a => a.length > 0) // remove empty lines
-    .join('\n\n')
-
-  message.reply(reply)
+  message.reply([
+    `Killed **${channelName}** at ${newBoss.diedAt}.`,
+    `Please add participants by using the command \`!kill participate\` (see ${readfirst}).`
+  ].join('\n'))
 }
 
 const participateKill = async (message) => {
-  const name = message.channel.name
+  const channelName = message.channel.name
 
-  const boss = BOSSES.get(name)
+  const activeKills = await asyncQueue(getActiveKills)
 
-  if (boss == null) {
-    message.reply(`No kill started for ${name}. Please start kill with \`!kill start\``)
-    return
+  const currentBossIndex = activeKills.findIndex(boss => boss.channelName === channelName)
+
+  if (currentBossIndex === -1) {
+    throw new ValidationError(`Cannot find a kill for ${channelName}. See ${readfirst} and try \`!kill start\``)
   }
 
-  const { participants } = boss
-
+  const currentBoss = activeKills[currentBossIndex]
   const parsed = message.content.split(/\s+/)
   const participantGuild = findGuild(parsed[2])
   const participantCount = parseInt(parsed[3], 10)
 
   if (participantGuild == null) {
-    throw new Error('Invalid guild name')
+    throw new ValidationError(`Cannot find guild matching ${parsed[2]}`)
   }
 
   if (participantCount == null) {
-    throw new Error('Invalid number of participants')
+    throw new ValidationError('Please provide the number of guild members who participate')
   }
 
-  participants.set(participantGuild.name, participantCount)
+  const participantGuildName = participantGuild.name
+
+  currentBoss[participantGuildName] = participantCount
+
+  await asyncQueue(updateActiveKill.bind(null, currentBossIndex, participantGuildName, participantCount))
 
   const rolls = []
 
   let counter = 0
 
-  for (const guildName of participants.keys()) {
-    const participantCount = participants.get(guildName)
-    rolls.push({ guildName, start: counter + 1, stop: counter + participantCount })
-    counter += participantCount
+  for (const guild of GUILDS) {
+    const guildName = guild.name
+    const participantCount = currentBoss[guildName]
+
+    if (participantCount > 0) {
+      rolls.push({ guildName, start: counter + 1, stop: counter + participantCount })
+      counter += participantCount
+    }
   }
 
   const reply = [
     `Set ${participantCount} participants for ${participantGuild.name}.`,
-    rolls.map(({ guildName, start, stop }) => `For **${guildName}**, roll **${start} to ${stop}**.`).join('\n')
-  ].join('\n\n')
+    ...rolls.map(({ guildName, start, stop }) => `For **${guildName}**, roll **${start} to ${stop}**.`)
+  ].join('\n')
 
   message.reply(reply)
 }
 
 const completeKill = async (message) => {
-  const name = message.channel.name
-  const completed = await completeKillHelper(name)
-
-  if (completed) {
-    message.reply(`Completed kill for **${name}** and recorded to spreadsheet.`)
-  } else {
-    message.reply(`No kill to complete for **${name}**. It may have been completed automatically (1 hour timeout), or you may need to start a kill with \`!kill start\``)
-  }
+  const channelName = message.channel.name
+  await completeKillHelper({ channelName })
+  message.reply(`Completed kill for **${channelName}** and recorded to spreadsheet.`)
 }
 
 module.exports = {
   startKill,
   participateKill,
-  completeKill
+  completeKill,
+  killTimer
 }
