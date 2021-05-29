@@ -27,5 +27,5 @@ module.exports = async (message) => {
     `You've been added to **${chosenRole.name}** guild.`,
     `Your nickname has been updated to **${nickname}**. You can edit this, but **do not remove <GUILD> prefix!**`,
     'You have been removed from all other coalition guild roles.'
-  ].join('\n\n'))
+  ].join('\n'))
 }
