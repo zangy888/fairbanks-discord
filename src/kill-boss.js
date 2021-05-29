@@ -7,8 +7,8 @@ const { readfirst } = require('./channels')
 
 const sheets = google.sheets('v4')
 
-const KILL_COMPLETE_POLL_MS = 60000 // 10 * 60 * 1000 // 10 minutes
-const KILL_COMPLETE_TIMEOUT_MS = 60000 // 60 * 60 * 1000 // 1 hour
+const KILL_COMPLETE_POLL_MS = 10 * 60 * 1000 // 10 minutes
+const KILL_COMPLETE_TIMEOUT_MS = 60 * 60 * 1000 // 1 hour
 
 const asyncQueue = createAsyncQueue()
 
