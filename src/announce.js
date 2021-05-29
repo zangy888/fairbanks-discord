@@ -1,4 +1,5 @@
 const ValidationError = require('./validation-error')
+const { password } = require('./channels')
 
 const announce = async (message) => {
   const { content, channel } = message
@@ -15,7 +16,7 @@ const announce = async (message) => {
   channel.send([
     `@everyone !! **${boss}** has spawned !!`,
     `Whisper **${toonName}** the password to join the raid.`,
-    'See #read-first for password.'
+    `See ${password} for password.`
   ].join('\n'))
 }
 

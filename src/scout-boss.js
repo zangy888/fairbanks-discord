@@ -3,6 +3,7 @@ const ValidationError = require('./validation-error')
 const { google } = require('googleapis')
 
 const { ALL_GUILD_ROLE_IDS } = require('./guilds')
+const { readfirst } = require('./channels')
 
 const sheets = google.sheets('v4')
 
@@ -157,7 +158,7 @@ const deriveScoutInformation = async (message) => {
   const guildRole = member.roles.cache.find(role => ALL_GUILD_ROLE_IDS.includes(role.id))
 
   if (guildRole == null) {
-    throw new ValidationError('No guild role found. See #read-first and try `!register`')
+    throw new ValidationError(`No guild role found. See ${readfirst} and try \`!register\``)
   }
 
   return {
@@ -176,7 +177,7 @@ const scoutStopHelper = async ({ userName, toonName, channelName }) => {
   })
 
   if (existingScout == null) {
-    throw new ValidationError('No scouting session found for user. See #read-first and try `!scout start`')
+    throw new ValidationError(`No scouting session found for user. See ${readfirst} and try \`!scout start\``)
   }
 
   if (existingScout.channelName !== channelName) {
@@ -224,7 +225,7 @@ const scoutStart = async (message) => {
   })
 
   if (existingScout != null) {
-    throw new ValidationError('Must stop a scouting session before starting a new scouting session. See #read-first and try `!scout stop`')
+    throw new ValidationError(`Must stop a scouting session before starting a new scouting session. See ${readfirst} and try \`!scout stop\``)
   }
 
   const { createdTimestamp } = message
@@ -253,7 +254,7 @@ const scoutContinue = async (message) => {
   })
 
   if (existingScoutIndex === -1) {
-    throw new ValidationError('No scouting session found for user. See #read-first and try `!scout start`')
+    throw new ValidationError(`No scouting session found for user. See ${readfirst} and try \`!scout start\``)
   }
 
   const existingScout = activeScouts[existingScoutIndex]
