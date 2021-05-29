@@ -2,7 +2,8 @@
 const GUILDS = [
   { name: 'Phoenix', roleId: '845903390960779284' },
   { name: 'LPB', roleId: '845906478425440286' },
-  { name: 'NWFS', roleId: '845908959642648648' }
+  { name: 'NWFS', roleId: '845908959642648648' },
+  { name: 'CL', roleId: '847220677550931999' }
 ]
 
 const ALL_GUILD_ROLE_IDS = GUILDS.map(guild => guild.roleId)
