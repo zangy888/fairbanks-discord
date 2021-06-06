@@ -198,7 +198,7 @@ const participateKill = async (message) => {
   }
 
   if (participantCount == null) {
-    throw new ValidationError('Please provide the number of guild members who participate')
+    throw new ValidationError('Please provide the number of guild members who participated')
   }
 
   const participantGuildName = participantGuild.name
@@ -223,7 +223,8 @@ const participateKill = async (message) => {
 
   const reply = [
     `Set ${participantCount} participants for ${participantGuild.name}.`,
-    ...rolls.map(({ guildName, start, stop }) => `For **${guildName}**, roll **${start} to ${stop}**.`)
+    `Raid leader, **/roll 1 to ${counter}**`,
+    ...rolls.map(({ guildName, start, stop }) => `For **${guildName}**, roll range is **${start} to ${stop}**.`)
   ].join('\n')
 
   message.reply(reply)

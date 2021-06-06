@@ -1,7 +1,7 @@
 const ValidationError = require('./validation-error')
 const { ALL_GUILD_ROLE_IDS, findGuild } = require('./guilds')
 
-module.exports = async (message) => {
+const register = async (message) => {
   const { author, guild, content } = message
 
   const requested = content.split(/\s+/)[1]
@@ -29,3 +29,5 @@ module.exports = async (message) => {
     'You have been removed from all other coalition guild roles.'
   ].join('\n'))
 }
+
+module.exports = { register }
